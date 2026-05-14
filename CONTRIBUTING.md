@@ -187,7 +187,7 @@ refactor(generator): extract tower path builder into helper function
 
 ## 🔁 Opening a Pull Request
 
-1. **Fork** the repository and create your branch off `main`
+1. **Fork** and **Star** the repository and create your branch off `main`
 2. **Make your changes** following the pillar guidelines above
 3. **Test locally** — verify the SVG renders correctly at `localhost:3000/api/streak?user=YOUR_USERNAME`
 4. **Open a PR** with the following template filled out:
