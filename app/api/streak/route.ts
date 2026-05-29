@@ -26,6 +26,10 @@ export class ValidationError extends Error {
   }
 }
 
+function escapeSVGText(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function getMonthlyReferenceDate(year: string | undefined, timezone: string): Date | undefined {
   if (!year) return undefined;
 
@@ -300,7 +304,7 @@ function buildErrorResponse(error: unknown, parseResult: ParseResult): NextRespo
       <svg xmlns="http://www.w3.org/2000/svg" width="400" height="150">
         <rect width="100%" height="100%" fill="#2d0000" rx="8"/>
         <text x="50%" y="50%" text-anchor="middle" fill="#ffcccc" font-family="sans-serif">
-          ${message}
+          ${escapeSVGText(message)}
         </text>
       </svg>
     `;

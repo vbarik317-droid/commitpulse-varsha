@@ -721,6 +721,17 @@ describe('GET /api/streak', () => {
       expect(body).toContain('garbage');
     });
 
+    it('escapes invalid timezone values before rendering the error SVG', async () => {
+      const response = await GET(
+        makeRequest({ user: 'octocat', tz: '</text><script>alert(1)</script>' })
+      );
+      const body = await response.text();
+
+      expect(response.status).toBe(400);
+      expect(body).toContain('&lt;/text&gt;&lt;script&gt;alert(1)&lt;/script&gt;');
+      expect(body).not.toContain('</text><script>');
+    });
+
     it('returns 200 with a valid IANA timezone', async () => {
       const response = await GET(makeRequest({ user: 'octocat', tz: 'America/New_York' }));
 
