@@ -1,6 +1,11 @@
 // lib/github.ts
 
-import type { ContributionCalendar, ContributionDay } from '@/types';
+import type {
+  ContributionCalendar,
+  ContributionDay,
+  ExtendedContributionData,
+  RepoContribution,
+} from '@/types';
 import { calculateStreak, aggregateCalendars, calculateWrappedStats } from '@/lib/calculate';
 import { TTLCache } from '@/lib/cache';
 import { LANGUAGE_COLORS } from '@/lib/svg/languageColors';
@@ -120,12 +125,17 @@ function throwIfRateLimited(res: Response): void {
   }
 }
 
-type GitHubContributionResponse = {
+interface GitHubGraphQLResponse {
   data?: {
-    user: { contributionsCollection: { contributionCalendar: ContributionCalendar } } | null;
+    user: {
+      contributionsCollection: {
+        contributionCalendar: ContributionCalendar;
+        commitContributionsByRepository: RepoContribution[];
+      };
+    } | null;
   };
   errors?: unknown;
-};
+}
 
 function getGraphQLErrorMessage(errors: unknown): string {
   if (!Array.isArray(errors)) return 'GitHub GraphQL API returned an unknown error';
@@ -150,7 +160,7 @@ type FetchOptions = {
 
 export const GITHUB_CACHE_TTL_MS = 5 * 60 * 1000;
 
-const contributionsCache = new TTLCache<ContributionCalendar>(1000);
+const contributionsCache = new TTLCache<ExtendedContributionData>(1000);
 const profileCache = new TTLCache<GitHubUserProfile>(1000);
 const reposCache = new TTLCache<GitHubRepo[]>(500);
 
@@ -213,7 +223,7 @@ export function displayName(profile: GitHubUserProfile): string {
 export async function fetchGitHubContributions(
   username: string,
   options: FetchOptions = {}
-): Promise<ContributionCalendar> {
+): Promise<ExtendedContributionData> {
   const key = cacheKey('contributions', username, options.from?.substring(0, 4));
   if (!options.bypassCache) {
     const cached = contributionsCache.get(key);
@@ -232,6 +242,16 @@ export async function fetchGitHubContributions(
                 date
                 color
               }
+            }
+          }
+          commitContributionsByRepository(maxRepositories: 100) {
+            repository {
+              primaryLanguage {
+                name
+              }
+            }
+            contributions {
+              totalCount
             }
           }
         }
@@ -256,7 +276,7 @@ export async function fetchGitHubContributions(
     throw new Error(`GitHub GraphQL API returned status ${res.status}`);
   }
 
-  const data: GitHubContributionResponse = await res.json();
+  const data: GitHubGraphQLResponse = await res.json();
   if (data.errors !== undefined) throw new Error(getGraphQLErrorMessage(data.errors));
   if (!data.data?.user) throw new Error(`GitHub user "${username}" not found`);
 
@@ -292,9 +312,21 @@ export async function fetchGitHubContributions(
     });
   });
 
-  if (!options.bypassCache) contributionsCache.set(key, calendar, GITHUB_CACHE_TTL_MS);
+  if (!options.bypassCache) {
+    contributionsCache.set(
+      key,
+      {
+        calendar,
+        repoContributions: data.data.user.contributionsCollection.commitContributionsByRepository,
+      },
+      GITHUB_CACHE_TTL_MS
+    );
+  }
 
-  return calendar;
+  return {
+    calendar,
+    repoContributions: data.data.user.contributionsCollection.commitContributionsByRepository,
+  };
 }
 
 export async function fetchUserProfile(
@@ -422,7 +454,9 @@ export async function getOrgDashboardData(orgName: string, options: FetchOptions
 
   // Fetch calendars for all members concurrently (Capped by member limit to avoid 429)
   const memberCalendarsPromises = members.map((member: string) =>
-    fetchGitHubContributions(member, options).catch(() => null)
+    fetchGitHubContributions(member, options)
+      .then((data) => data.calendar)
+      .catch(() => null)
   );
 
   const calendars = (await Promise.all(memberCalendarsPromises)).filter(
@@ -474,7 +508,8 @@ export async function getWrappedData(username: string, year: string) {
     to: `${year}-12-31T23:59:59Z`,
     bypassCache: true,
   };
-  const calendar = await fetchGitHubContributions(username, options);
+  const userData = await fetchGitHubContributions(username, options);
+  const calendar = userData.calendar;
   const repos = await fetchUserRepos(username, options);
 
   const wrappedStats = calculateWrappedStats(calendar);
@@ -662,8 +697,10 @@ export async function getFullDashboardData(username: string, options: FetchOptio
   const reposData = reposResult.status === 'fulfilled' ? reposResult.value : [];
   const calendarData =
     calendarResult.status === 'fulfilled'
-      ? calendarResult.value
+      ? calendarResult.value.calendar
       : ({ totalContributions: 0, weeks: [] } as ContributionCalendar);
+  const repoContributions =
+    calendarResult.status === 'fulfilled' ? calendarResult.value.repoContributions : [];
 
   const streakStats = calculateStreak(calendarData);
   const totalStars = reposData.reduce((acc, repo) => acc + repo.stargazers_count, 0);
@@ -716,8 +753,11 @@ export async function getFullDashboardData(username: string, options: FetchOptio
   });
 
   const langCounts: Record<string, number> = {};
-  reposData.forEach((repo) => {
-    if (repo.language) langCounts[repo.language] = (langCounts[repo.language] || 0) + 1;
+  repoContributions.forEach((contrib) => {
+    const lang = contrib.repository.primaryLanguage?.name;
+    if (lang) {
+      langCounts[lang] = (langCounts[lang] || 0) + contrib.contributions.totalCount;
+    }
   });
 
   const totalLangs = Object.values(langCounts).reduce((a, b) => a + b, 0);

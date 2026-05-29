@@ -59,7 +59,10 @@ function makeRequest(params: Record<string, string> = {}): Request {
 describe('GET /api/streak', () => {
   beforeEach(() => {
     vi.clearAllMocks(); // reset call counts so per-test call assertions are isolated
-    vi.mocked(fetchGitHubContributions).mockResolvedValue(mockCalendar);
+    vi.mocked(fetchGitHubContributions).mockResolvedValue({
+      calendar: mockCalendar,
+      repoContributions: [],
+    });
     vi.mocked(getOrgDashboardData).mockResolvedValue({
       profile: {
         username: 'octocat',
@@ -796,12 +799,15 @@ describe('GET /api/streak', () => {
     it('applies delta_format=absolute to show raw commit counts in the monthly SVG', async () => {
       // 1. Mock the GitHub fetch with actual weekly data using vi.mocked
       vi.mocked(fetchGitHubContributions).mockResolvedValueOnce({
-        totalContributions: 150,
-        weeks: [
-          { contributionDays: [{ date: '2026-04-15', contributionCount: 10 }] },
-          { contributionDays: [{ date: '2026-05-15', contributionCount: 15 }] },
-        ],
-      } as unknown as ContributionCalendar);
+        calendar: {
+          totalContributions: 150,
+          weeks: [
+            { contributionDays: [{ date: '2026-04-15', contributionCount: 10 }] },
+            { contributionDays: [{ date: '2026-05-15', contributionCount: 15 }] },
+          ],
+        } as unknown as ContributionCalendar,
+        repoContributions: [],
+      });
 
       // 2. Lock the system time to May 2026 so the calendar calculation aligns
       vi.useFakeTimers();
@@ -842,7 +848,10 @@ describe('GET /api/streak', () => {
         ],
       };
 
-      vi.mocked(fetchGitHubContributions).mockResolvedValue(emptyCalendar);
+      vi.mocked(fetchGitHubContributions).mockResolvedValue({
+        calendar: emptyCalendar,
+        repoContributions: [],
+      });
       const response = await GET(makeRequest({ user: 'octocat' }));
       const body = await response.text();
 
