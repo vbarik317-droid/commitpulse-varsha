@@ -6,7 +6,7 @@ import type {
   ExtendedContributionData,
   RepoContribution,
 } from '@/types';
-import { calculateStreak, aggregateCalendars, calculateWrappedStats } from '@/lib/calculate';
+import { calculateStreak, aggregateCalendars } from '@/lib/calculate';
 import { DistributedCache } from '@/lib/cache';
 import { LANGUAGE_COLORS } from '@/lib/svg/languageColors';
 import { CONTRIBUTION_MILESTONES, STREAK_MILESTONES } from './svg/constants';
