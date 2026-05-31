@@ -146,13 +146,20 @@ export class TTLCache<T> {
    * @returns `true` if the entry existed and was updated, `false` if missing or expired.
    */
   update(key: string, value: T): boolean {
-    TTLCache.assertValidKey(key);
+  const hit = this.store.get(key);
 
-    const hit = this.store.get(key);
-    if (!hit || Date.now() > hit.expiresAt) return false;
-    hit.value = value;
-    return true;
+  if (!hit) {
+    return false;
   }
+
+  if (Date.now() > hit.expiresAt) {
+    this.store.delete(key);
+    return false;
+  }
+
+  hit.value = value;
+  return true;
+}
 
   set(key: string, value: T, ttlMs: number): void {
     TTLCache.assertValidKey(key);
