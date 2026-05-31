@@ -10,6 +10,7 @@ import {
   getSizeScale,
   truncateUsername,
   deterministicRandom,
+  buildTowerPaths,
 } from './generator';
 import type { BadgeParams, ContributionCalendar, StreakStats, MonthlyStats } from '../../types';
 import { hexColor } from './sanitizer';
@@ -440,7 +441,7 @@ describe('generateSVG', () => {
 
     it('includes desc element in auto-theme SVG output', () => {
       const svg = generateSVG(mockStats, autoParams, mockCalendar);
-      expect(svg).toContain('<desc>');
+      expect(svg).toContain('<desc id="cp-desc-avi">');
       expect(svg).toContain(String(mockStats.totalContributions));
     });
 
@@ -694,8 +695,12 @@ describe('generateSVG', () => {
         mockCalendar
       );
 
-      expect(svg).toContain('<title>CommitPulse User Stats for octocat</title>');
-      expect(svg).toContain('<desc>');
+      expect(svg).toContain(
+        '<title id="cp-title-octocat">CommitPulse User Stats for octocat</title>'
+      );
+      expect(svg).toContain('<desc id="cp-desc-octocat">');
+      expect(svg).toContain('aria-labelledby="cp-title-octocat"');
+      expect(svg).toContain('aria-describedby="cp-desc-octocat"');
       expect(svg).toContain('100');
       expect(svg).toContain('10');
     });
@@ -1519,5 +1524,21 @@ describe('deterministicRandom', () => {
     const a = deterministicRandom('seed-alpha');
     const b = deterministicRandom('seed-beta');
     expect(a).not.toBe(b);
+  });
+});
+
+describe('buildTowerPaths', () => {
+  it('returns correct paths for scale 1', () => {
+    const paths = buildTowerPaths(15, 1);
+    expect(paths.left).toBe('M0 -5 L0 10 L-16 0 L-16 -15 Z');
+    expect(paths.right).toBe('M0 -5 L0 10 L16 0 L16 -15 Z');
+    expect(paths.top).toBe('M0 -15 L16 -5 L0 5 L-16 -5 Z');
+  });
+
+  it('returns correct paths for scale 0.45', () => {
+    const paths = buildTowerPaths(9, 0.45);
+    expect(paths.left).toBe('M0 -4.5 L0 4.5 L-7.2 0 L-7.2 -9 Z');
+    expect(paths.right).toBe('M0 -4.5 L0 4.5 L7.2 0 L7.2 -9 Z');
+    expect(paths.top).toBe('M0 -9 L7.2 -4.5 L0 0 L-7.2 -4.5 Z');
   });
 });
