@@ -11,7 +11,12 @@ function loadFromStorage(): string[] {
   let saved: string[] = [];
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) saved = JSON.parse(stored) as string[];
+    if (stored) {
+      const parsed: unknown = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        saved = parsed.filter((item): item is string => typeof item === 'string');
+      }
+    }
   } catch {
     // ignore malformed storage
   }
@@ -48,24 +53,24 @@ export function useRecentSearches() {
   const [state, setState] = useState<State>({ searches: [], mounted: false });
 
   useEffect(() => {
-    // Single setState call — reads external system (localStorage) and syncs
-    // React state in one update, which is exactly what effects are for.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setState({ searches: loadFromStorage(), mounted: true });
   }, []);
+  // Single setState call — reads external system (localStorage) and syncs
+  // React state in one update, which is exactly what effects are for.
+  useEffect(() => {
+    if (!state.mounted) return;
 
-  /**
-   * Adds a new search query to the recent searches list.
-   * If the query already exists, it is moved to the top.
-   * The list is truncated to the maximum number of searches allowed.
-   *
-   * @param query - The search query to add.
-   */
+    // Don't write anything for an empty list.
+    if (state.searches.length === 0) return;
+
+    writeStorage(state.searches);
+  }, [state.searches, state.mounted]);
+
   const addSearch = (query: string) => {
     if (!query.trim()) return;
     setState((prev) => {
       const deduped = [query, ...prev.searches.filter((s) => s !== query)].slice(0, MAX_SEARCHES);
-      writeStorage(deduped);
       return { ...prev, searches: deduped };
     });
   };
@@ -74,18 +79,13 @@ export function useRecentSearches() {
    * Clears all recent searches from state and localStorage.
    */
   const clearSearches = () => {
+    setState((prev) => ({ ...prev, searches: [] }));
     writeStorage(null);
-
-    setState((prev) => ({
-      ...prev,
-      searches: [],
-    }));
   };
 
   const removeSearch = (query: string): void => {
     setState((prev) => {
       const filtered = prev.searches.filter((s) => s !== query);
-      writeStorage(filtered);
       return { ...prev, searches: filtered };
     });
   };
